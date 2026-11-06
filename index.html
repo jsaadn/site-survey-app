@@ -361,7 +361,7 @@ function projectView(p){
    <button onclick="exportExcel()">⬇ Excel (.xlsx)</button>
    <button class="ghost" onclick="exportPhotos()">📷 Photos (.zip)</button>
    <button onclick="go('report',{pid:'${p.id}'})">🖨 Site survey report (PDF)</button>
-   <button class="ghost" onclick="exportJSON()">📤 Send to reviewer (.json)</button></div>
+   <button class="ghost" onclick="shareReview()">✉️ Share for Review</button><button class="ghost" onclick="shareReturn()">↩️ Share Back to Engineer</button><button class="ghost" onclick="exportJSON()">📤 Download project file (.json)</button></div>
    <p class="muted">Excel has one sheet per register (Project / each equipment type / photo list) in the same columns as the SharePoint lists. Photo file names in Excel match the files in the Photos zip.</p></div>
    ${L?'':`<button class="ghost danger" onclick="delProject()">Delete project from this device</button>`}`;
   return h;
@@ -378,7 +378,7 @@ function submitProject(){ const p=P(); const probs=[];
   p.sites.forEach(s=>{ if(!s.name) probs.push('a site name'); s.buildings.forEach(b=>{ const i=bldIssues(b); if(i.length) probs.push(`${b.name}: ${i.join(', ')}`); }); });
   p.units.forEach(u=>{ const i=unitIssues(p,u); if(i.length) probs.push(`${FORM(u.form).name} ${u.data.unit_ref||'(no ref)'}: ${i.join(', ')}`); });
   if(probs.length && !confirm(`${probs.length} item(s) are incomplete:\n\n• ${probs.slice(0,12).join('\n• ')}${probs.length>12?'\n…':''}\n\nSubmit anyway?`)) return;
-  setStatus('Submitted'); exportJSON(); alert('Submitted. A project file has been downloaded – send it to your reviewer (Teams / email / SharePoint).'); }
+  setStatus('Submitted'); shareReview(true); }
 function setStatus(st,what){ const p=P(); p.status=st; p.history.push({at:now(),by:S.user.name,what:what||st}); touch(p); render(); }
 
 // ----- New building: new / copy / template / batch -----
@@ -613,6 +613,23 @@ const baseName=p=>`${safe(p.no)}_${safe(p.name)}_SiteSurvey_${stamp()}`;
 // ===== Export: JSON (hand-over / merge) =====
 function exportJSON(){ const p=P(); download(new Blob([JSON.stringify({app:'SiteSurvey',version:1,exportedBy:S.user.name,exportedAt:now(),project:p})],{type:'application/json'}),
   `${safe(p.no)}_${safe(p.name)}_${p.status}_${stamp()}.json`); }
+function projectFile(p){ const name=`${safe(p.no)}_${safe(p.name)}_${p.status}_${stamp()}.json`; const blob=new Blob([JSON.stringify({app:'SiteSurvey',version:1,exportedBy:S.user.name,exportedAt:now(),project:p})],{type:'application/json'}); return {name,blob,file:new File([blob],name,{type:'application/json'})}; }
+async function shareFileTo(email,mode,alreadySubmitted){
+  const p=P(); if(!email) return alert(`Please enter the ${mode==='review'?'Reviewer':'Engineer'} Email first.`);
+  if(!/^\S+@\S+\.\S+$/.test(email)) return alert('Please enter a valid email address.');
+  if(mode==='review'&&!alreadySubmitted&&p.status==='Draft') setStatus('Submitted');
+  const x=projectFile(p);
+  const subject=mode==='review'?`Site Survey Review – ${p.no} – ${p.name}`:`Site Survey Returned – ${p.no} – ${p.name}`;
+  const text=mode==='review'?`Please review the attached site survey.\n\nProject: ${p.no} – ${p.name}\nStatus: ${p.status}\nSubmitted by: ${S.user.name}`:`Please find the reviewed site survey attached.\n\nProject: ${p.no} – ${p.name}\nStatus: ${p.status}\nReturned by: ${S.user.name}`;
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[x.file]}))){ await navigator.share({title:subject,text:`To: ${email}\n\n${text}`,files:[x.file]}); return; }
+  }catch(e){ if(e && e.name==='AbortError') return; }
+  download(x.blob,x.name);
+  const href=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text+'\n\nThe project file has been downloaded separately. Please attach '+x.name+' to this email.')}`;
+  setTimeout(()=>location.href=href,350);
+}
+function shareReview(alreadySubmitted){ return shareFileTo(P().reviewerEmail||'','review',alreadySubmitted); }
+function shareReturn(){ return shareFileTo(P().engineerEmail||'','return',false); }
 function importJSON(inp){ const file=inp.files[0]; if(!file) return; const r=new FileReader();
   r.onload=()=>{ try{ const j=JSON.parse(r.result); const p=j.project; if(!p||!p.id||!p.sites) throw 0;
     const i=S.projects.findIndex(x=>x.id===p.id);
