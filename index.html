@@ -319,7 +319,7 @@ function tplApprove(id){ S.templates.find(t=>t.id===id).approved=true; save(); r
 function tplDel(id){ if(confirm('Delete template?')){ S.templates=S.templates.filter(t=>t.id!==id); save(); render(); } }
 
 function newProject(){
-  const p={id:uid(),no:'',name:'',client:'',status:'Draft',history:[{at:now(),by:S.user.name,what:'Created'}],sites:[],units:[],createdBy:S.user.name,updatedAt:now()};
+  const p={id:uid(),no:'',name:'',client:'',engineerEmail:'',reviewerEmail:'',status:'Draft',history:[{at:now(),by:S.user.name,what:'Created'}],sites:[],units:[],createdBy:S.user.name,updatedAt:now()};
   S.projects.unshift(p); save(); go('project',{pid:p.id});
 }
 
@@ -332,6 +332,8 @@ function projectView(p){
    <label>Project No. *<input ${dis} value="${esc(p.no)}" placeholder="e.g. 016" onchange="P().no=this.value;touch(P())"></label>
    <label>Project Name *<input ${dis} value="${esc(p.name)}" placeholder="e.g. City Walk" onchange="P().name=this.value;touch(P())"></label>
    <label>Client Name<input ${dis} value="${esc(p.client)}" onchange="P().client=this.value;touch(P())"></label>
+   <label>Engineer Email<input ${dis} type="email" inputmode="email" placeholder="engineer@jci.com" value="${esc(p.engineerEmail||'')}" onchange="P().engineerEmail=this.value.trim();touch(P())"></label>
+   <label>Reviewer Email<input ${dis} type="email" inputmode="email" placeholder="reviewer@jci.com" value="${esc(p.reviewerEmail||'')}" onchange="P().reviewerEmail=this.value.trim();touch(P())"></label>
    <label>No. of Sites<input disabled value="${p.sites.length}"></label></div></div>`;
   h+=`<div class="row"><h3>Sites & buildings</h3><span class="sp"></span>${L?'':`<button onclick="addSite()">+ Add site</button>`}</div>`;
   for(const s of p.sites){
@@ -584,6 +586,7 @@ function dashView(p){
 function reportView(p){
   let h=`<div class="noprint row"><button onclick="window.print()">🖨 Print / Save as PDF</button><button class="ghost" onclick="go('project',{pid:'${p.id}'})">Back</button></div>
   <div class="rep"><h1>Site Survey Report</h1><table class="kv"><tr><td>Project</td><td>${esc(p.no)} – ${esc(p.name)}</td></tr><tr><td>Client</td><td>${esc(p.client)}</td></tr>
+  <tr><td>Engineer Email</td><td>${esc(p.engineerEmail||'')}</td><td>Reviewer Email</td><td>${esc(p.reviewerEmail||'')}</td></tr>
   <tr><td>Status</td><td>${esc(p.status)}</td></tr><tr><td>Generated</td><td>${new Date().toLocaleString()} by ${esc(S.user.name)}</td></tr></table>`;
   for(const s of p.sites){ h+=`<h2>${esc(s.name)} <small>${esc(s.location||'')} ${esc(s.gps||'')}</small></h2>`;
     for(const b of s.buildings){ h+=`<h3>${esc(b.name)}</h3><table class="kv"><tr><td>Building type</td><td>${esc(b.type)}</td><td>Operation time</td><td>${esc(b.opTime)}</td></tr>
@@ -652,8 +655,8 @@ async function buildXlsx(sheets){
 }
 function buildSheets(p){
   const plan=photoPlan(p); const pf=id=>plan.filter(x=>x.owner===id).map(x=>x.fn).join('; ');
-  const proj=[['Project No.','Project Name','Client Name','No. of Sites','Site Name','Site Location','GPS Location','No. of Buildings','Building Entry Method','Copy From / Template','Building Name','Building Type','Facility Operation Time','Number of Visitors/Occupants','Occupancy Pattern Per Week','Type of Cooling','Pre-filled (not confirmed)','Building Photo','Remarks','Missing']];
-  p.sites.forEach(s=>s.buildings.forEach(b=>proj.push([p.no,p.name,p.client,p.sites.length,s.name,s.location,s.gps,s.buildings.length,b.method,b.source,b.name,b.type,b.opTime,b.occ===''||b.occ===undefined?'':Number(b.occ),b.pattern,(b.cooling||[]).join('; '),b.prefilled?'Yes':'No',pf(b.id),b.remarks,bldIssues(b).join('; ')])));
+  const proj=[['Project No.','Project Name','Client Name','Engineer Email','Reviewer Email','No. of Sites','Site Name','Site Location','GPS Location','No. of Buildings','Building Entry Method','Copy From / Template','Building Name','Building Type','Facility Operation Time','Number of Visitors/Occupants','Occupancy Pattern Per Week','Type of Cooling','Pre-filled (not confirmed)','Building Photo','Remarks','Missing']];
+  p.sites.forEach(s=>s.buildings.forEach(b=>proj.push([p.no,p.name,p.client,p.engineerEmail||'',p.reviewerEmail||'',p.sites.length,s.name,s.location,s.gps,s.buildings.length,b.method,b.source,b.name,b.type,b.opTime,b.occ===''||b.occ===undefined?'':Number(b.occ),b.pattern,(b.cooling||[]).join('; '),b.prefilled?'Yes':'No',pf(b.id),b.remarks,bldIssues(b).join('; ')])));
   const sheets=[{name:'Project Information',rows:proj}];
   for(const fm of FORMS){ const us=p.units.filter(u=>u.form===fm.id);
     const rows=[['Project No.','Project Name','Site','Building','Unit Ref',...fm.fields.map(x=>x.label+(x.unit?` (${x.unit})`:'')),'Copied (not confirmed)','Reviewer query','Last edited by','Last edited','Missing']];
